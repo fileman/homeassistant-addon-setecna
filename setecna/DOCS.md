@@ -35,3 +35,11 @@ Once installed use the "configuration" tab to insert the following informations:
 - Advanced integration:
     - `ON` = The addon will match Home Assistant's built-in entities such as `climate` or `water_heater` with REG systems's zones and DWH parameters.
     - `OFF` = Home Assistant's built-in entities will not be created by the add-on (advanced users can still create them in their homeassistant's configuration.yaml)
+
+### MQTT broker (manual)
+
+By default the add-on auto-detects the MQTT broker from the **Mosquitto broker** add-on. If you use an external broker that is not published as a Home Assistant service (e.g. a standalone broker, or one configured only through the MQTT *integration*), set these so the add-on can connect:
+
+- `mqtt_host`, `mqtt_port`, `mqtt_user`, `mqtt_password`
+
+Leave them empty to use auto-detection. When `mqtt_host` is set, the manual values take precedence over auto-detection.

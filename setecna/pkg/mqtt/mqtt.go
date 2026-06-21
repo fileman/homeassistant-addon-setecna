@@ -18,9 +18,9 @@ type MqttServer struct {
 	client MQTT.Client
 }
 
-func (s *MqttServer) Connect(host, user, password string) {
+func (s *MqttServer) Connect(host, port, user, password string) {
 	opts := MQTT.NewClientOptions()
-	opts.AddBroker("tcp://" + host + ":1883")
+	opts.AddBroker("tcp://" + host + ":" + port)
 	opts.SetUsername(user)
 	opts.SetPassword(password)
 	opts.SetClientID("SetecnaScraperAddon")

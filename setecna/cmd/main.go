@@ -20,6 +20,7 @@ var username string = os.Getenv("REG_USER")
 var password string = os.Getenv("REG_PASSWORD")
 
 var mqttHost string = os.Getenv("MQTT_HOST")
+var mqttPort string = os.Getenv("MQTT_PORT")
 var mqttUser string = os.Getenv("MQTT_USER")
 var mqttPassword string = os.Getenv("MQTT_PASSWORD")
 
@@ -39,8 +40,12 @@ func main() {
 		isReadonly = true
 	}
 
+	if mqttPort == "" {
+		mqttPort = "1883"
+	}
+
 	mqttServer := new(mqtt.MqttServer)
-	mqttServer.Connect(mqttHost, mqttUser, mqttPassword)
+	mqttServer.Connect(mqttHost, mqttPort, mqttUser, mqttPassword)
 
 	scraper := new(scraper.Scraper)
 	scraper.Init(systemID)

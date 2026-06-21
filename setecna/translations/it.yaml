@@ -14,3 +14,15 @@ configuration:
   adv_int:
     name: Integrazione avanzata
     description: "[Con Modalità sola lettura disabilitata] Dove possibile l'addon trasformerà i parametri del sistema REG in entità native di Home Assistant (Es: Zone REG <-> Climate HA)."
+  mqtt_host:
+    name: Host MQTT (manuale)
+    description: "Opzionale. Lascia vuoto per rilevare automaticamente il broker dall'add-on Mosquitto. Imposta questo valore per connetterti a un broker MQTT esterno/configurato manualmente."
+  mqtt_port:
+    name: Porta MQTT (manuale)
+    description: "Porta del broker MQTT configurato manualmente. Usata solo quando 'Host MQTT (manuale)' è impostato. Predefinita 1883."
+  mqtt_user:
+    name: Utente MQTT (manuale)
+    description: "Nome utente per il broker MQTT configurato manualmente. Lascia vuoto per un broker anonimo."
+  mqtt_password:
+    name: Password MQTT (manuale)
+    description: "Password per il broker MQTT configurato manualmente. Lascia vuota per un broker anonimo."
