@@ -1,5 +1,13 @@
 <!-- https://developers.home-assistant.io/docs/add-ons/presentation#keeping-a-changelog -->
 
+## 1.2.1
+
+- Fix: saving the configuration failed with `Missing required option 'mqtt_host'`.
+  The optional `mqtt_host` / `mqtt_port` / `mqtt_user` / `mqtt_password` options had
+  a `null` default in `options:`, which Home Assistant rejects when the field is left
+  empty. They are now declared only in `schema:` (optional), so leaving them unset is
+  valid. To use a manual external broker, set them via the add-on's "Edit in YAML".
+
 ## 1.2.0
 
 Merges upstream **1.1.2** (network capability for HA Supervised / Debian 12,
