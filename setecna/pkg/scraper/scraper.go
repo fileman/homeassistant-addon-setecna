@@ -105,6 +105,7 @@ func (r *Response) GetUpdatedValues(systemID string, params models.ParamsMap) (m
 							Topic:   "homeassistant/sensor/" + systemID + "_LAST_UPDATE",
 							Message: date.Format(time.RFC3339),
 							Qos:     0,
+							Retain:  true,
 						}
 					}
 				} else {
@@ -115,6 +116,7 @@ func (r *Response) GetUpdatedValues(systemID string, params models.ParamsMap) (m
 					Topic:   "homeassistant/" + params[sensor.ID].EntityType + "/" + systemID + "_" + sensor.ID,
 					Message: string(sensor.V),
 					Qos:     0,
+					Retain:  true,
 				}
 			}
 			msgs = append(msgs, message)

@@ -1,6 +1,6 @@
 <!-- https://developers.home-assistant.io/docs/add-ons/presentation#keeping-a-changelog -->
 
-## 1.1.2
+## 1.1.3
 
 - Fix `ERROR: Got unexpected response from the API: Service not enabled` crash at
   startup: the start script now guards the Supervisor MQTT lookup with
@@ -22,8 +22,9 @@
 - Entities now report availability via an MQTT Last-Will/birth on
   `setecna/<systemID>/status`, so they show as **unavailable** when the add-on stops
   or crashes.
-- MQTT discovery (`.../config`) messages are published **retained**, so entities
-  survive a Home Assistant or broker restart.
+- MQTT discovery (`.../config`) messages **and entity state** are published
+  **retained**, so after a Home Assistant or broker restart entities keep their
+  last value instead of showing as *unknown* until the add-on is restarted.
 - Device card enriched with a `configuration_url` deep-link to the Setecna web UI.
 - New optional `debug_dump` option writes the full raw `getres` payload and a list
   of not-yet-mapped parameter IDs to `/share` once at startup, to help discover
