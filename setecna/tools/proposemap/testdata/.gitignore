@@ -1,0 +1,6 @@
+# Live station captures contain private telemetry + system labels — never commit.
+# (The synthetic sample_*.json fixtures ARE tracked and safe.)
+live_getres.json
+live_proposals.txt
+setecna_getres_dump.json
+setecna_unmapped_ids.json

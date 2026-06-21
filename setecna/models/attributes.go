@@ -2,8 +2,46 @@ package models
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 )
+
+// SwVersion is the station firmware/release string shown in the Home Assistant
+// device block. It is set once at startup (from the getres FIRMWARE_RELEASE /
+// DOT_RELEASE params) before entities are built; empty means "unknown" and the
+// device block omits sw_version.
+var SwVersion string
+
+// resolveLabel decodes a *_DESCR descriptor into the user's free-text label.
+// The station's description fields are indices into a table: values >= 240 point
+// at the free-description array (_FREEDESC1.._FREEDESC16), with 240 -> _FREEDESC1.
+// Values below 240 index a built-in (untranslated) table and 0 means "no label".
+// Returns "" when there is no usable free-text label. This holds across every
+// family (zones, circuits, sources, analog inputs, ...) — _DESCR is always a
+// name index, never a type code.
+func resolveLabel(from map[string]string, descrKey string) string {
+	d, err := strconv.Atoi(strings.TrimSpace(from[descrKey]))
+	if err != nil || d < 240 {
+		return ""
+	}
+	// 240..255 -> _FREEDESC1.._FREEDESC16; 256+ continues into the extended
+	// _XFREEDESC table (offset inferred — confirm on a station that uses more
+	// than 16 free descriptions). Out-of-range lookups return "" and the caller
+	// falls back to the generic name.
+	if d >= 256 {
+		return strings.TrimSpace(from["_XFREEDESC"+strconv.Itoa(d-255)])
+	}
+	return strings.TrimSpace(from["_FREEDESC"+strconv.Itoa(d-239)])
+}
+
+// LabelOr returns the decoded free-text label for descrKey, or fallback when the
+// station has no custom label for it.
+func LabelOr(from map[string]string, descrKey, fallback string) string {
+	if l := resolveLabel(from, descrKey); l != "" {
+		return l
+	}
+	return fallback
+}
 
 type Attributes struct {
 	CommandTemplate   string   `json:"command_template"`
@@ -35,6 +73,9 @@ func (m ParamsMap) AddEnabledParams(from map[string]string, isReadOnly bool) {
 	m.addDehumidifier(from, true, isReadOnly, !isReadOnly)
 	m.addEnergymeters(from, true, isReadOnly, !isReadOnly)
 	m.addCalendars(from, true, isReadOnly, !isReadOnly)
+	m.addAlarms(from, true, isReadOnly, !isReadOnly)
+	m.addSolar(from, true, isReadOnly, !isReadOnly)
+	m.addDevice(from, true, isReadOnly, !isReadOnly)
 	m.markDiagnostics()
 }
 
@@ -50,6 +91,9 @@ func (m ParamsMap) AddDisabledParams(from map[string]string, isReadOnly bool) {
 	m.addDehumidifier(from, false, !isReadOnly, isReadOnly)
 	m.addEnergymeters(from, false, !isReadOnly, isReadOnly)
 	m.addCalendars(from, false, !isReadOnly, isReadOnly)
+	m.addAlarms(from, false, !isReadOnly, isReadOnly)
+	m.addSolar(from, false, !isReadOnly, isReadOnly)
+	m.addDevice(from, false, !isReadOnly, isReadOnly)
 	m.markDiagnostics()
 }
 
@@ -319,8 +363,10 @@ func (m ParamsMap) addAnalogInput(from map[string]string, static, read, write bo
 	if static {
 		for i := 1; i <= 8; i++ {
 			if from["FAIN"+fmt.Sprint(i)+"_TEMP"] != "32769" {
+				// FAIN{n}_DESCR is a name index (not a type code): all analog
+				// inputs read temperature; the descriptor only names them.
 				m["FAIN"+fmt.Sprint(i)+"_TEMP"] = Attributes{
-					Name:              "Analog input " + fmt.Sprint(i),
+					Name:              LabelOr(from, "FAIN"+fmt.Sprint(i)+"_DESCR", "Analog input "+fmt.Sprint(i)),
 					EntityType:        "sensor",
 					DeviceClass:       "temperature",
 					StateClass:        "measurement",
@@ -360,14 +406,15 @@ func (m ParamsMap) addDigitalAlarm(from map[string]string, static, read, write b
 func (m ParamsMap) addZones(from map[string]string, static, read, write bool) {
 	for i := 1; i <= 32; i++ {
 		if from["Z"+fmt.Sprint(i)+"_SENSOR_CHN"] != "0" {
+			base := LabelOr(from, "Z"+fmt.Sprint(i)+"_DESCR", "Zone "+fmt.Sprint(i))
 			if static {
 				m["Z"+fmt.Sprint(i)+"_OUTPUT"] = Attributes{
-					Name:          "Zone " + fmt.Sprint(i) + " state",
+					Name:          base + " state",
 					EntityType:    "binary_sensor",
 					ValueTemplate: "{% if value == \"1\" %}on{% else %}off{% endif %}",
 				}
 				m["Z"+fmt.Sprint(i)+"_TEMP"] = Attributes{
-					Name:              "Zone " + fmt.Sprint(i) + " temperature",
+					Name:              base + " temperature",
 					EntityType:        "sensor",
 					DeviceClass:       "temperature",
 					UnitOfMeasurement: "°C",
@@ -376,13 +423,13 @@ func (m ParamsMap) addZones(from map[string]string, static, read, write bool) {
 					CommandTemplate:   "{{ (value * 10) | int }}",
 				}
 				m["Z"+fmt.Sprint(i)+"_ZONE_MODE"] = Attributes{
-					Name:          "Zone " + fmt.Sprint(i) + " mode",
+					Name:          base + " mode",
 					EntityType:    "sensor",
 					DeviceClass:   "enum",
 					ValueTemplate: "{% if value == \"0\" %}off{% elif value == \"2\" %}economy{% elif value == \"3\" %}comfort{% elif value == \"4\" %}forced off{% elif value == \"6\" %}forced economy{% elif value == \"23\" %}forced comfort{% else %}{{ value }}{% endif %}",
 				}
 				m["Z"+fmt.Sprint(i)+"_ZONE_SET"] = Attributes{
-					Name:              "Zone " + fmt.Sprint(i) + " setpoint",
+					Name:              base + " setpoint",
 					EntityType:        "sensor",
 					DeviceClass:       "temperature",
 					UnitOfMeasurement: "°C",
@@ -390,16 +437,52 @@ func (m ParamsMap) addZones(from map[string]string, static, read, write bool) {
 					ValueTemplate:     "{{ value | int / 10 }}",
 					CommandTemplate:   "{{ (value * 10) | int }}",
 				}
+				m["Z"+fmt.Sprint(i)+"_SENSOR_CHN"] = Attributes{
+					Name:           base + " sensor channel",
+					EntityType:     "sensor",
+					EntityCategory: "diagnostic",
+					ValueTemplate:  "{{ value | int }}",
+				}
+				m["Z"+fmt.Sprint(i)+"_DEUM"] = Attributes{
+					Name:          base + " dehumidify demand",
+					EntityType:    "binary_sensor",
+					ValueTemplate: "{% if value == \"1\" %}on{% else %}off{% endif %}",
+				}
+				m["Z"+fmt.Sprint(i)+"_TEMP_OFFSET"] = Attributes{
+					Name:              base + " temperature offset",
+					EntityType:        "sensor",
+					DeviceClass:       "temperature",
+					UnitOfMeasurement: "°C",
+					EntityCategory:    "diagnostic",
+					StateClass:        "measurement",
+					ValueTemplate:     "{{ value | int / 10 }}",
+				}
+				m["Z"+fmt.Sprint(i)+"_LINKED"] = Attributes{
+					Name:           base + " linked zone",
+					EntityType:     "sensor",
+					EntityCategory: "diagnostic",
+					ValueTemplate:  "{{ value | int }}",
+				}
+				if from["Z"+fmt.Sprint(i)+"_DEWPOINT"] != "32769" {
+					m["Z"+fmt.Sprint(i)+"_DEWPOINT"] = Attributes{
+						Name:              base + " dewpoint",
+						EntityType:        "sensor",
+						DeviceClass:       "temperature",
+						UnitOfMeasurement: "°C",
+						StateClass:        "measurement",
+						ValueTemplate:     "{{ value | int / 10 }}",
+					}
+				}
 			}
 			if read {
 				m["Z"+fmt.Sprint(i)+"_FORCING"] = Attributes{
-					Name:          "Zone " + fmt.Sprint(i) + " preset",
+					Name:          base + " preset",
 					EntityType:    "sensor",
 					DeviceClass:   "enum",
 					ValueTemplate: "{% if value == \"0\" %}automatic{% elif value == \"1\" %}forced off{% elif value == \"2\" %}forced economy{% elif value == \"3\" %}forced comfort{% else %}{{ value }}{% endif %}",
 				}
 				m["Z"+fmt.Sprint(i)+"_SET_CW"] = Attributes{
-					Name:              "Zone " + fmt.Sprint(i) + " C.W. setpoint",
+					Name:              base + " C.W. setpoint",
 					EntityType:        "sensor",
 					DeviceClass:       "temperature",
 					UnitOfMeasurement: "°C",
@@ -408,7 +491,7 @@ func (m ParamsMap) addZones(from map[string]string, static, read, write bool) {
 					CommandTemplate:   "{{ (value * 10) | int }}",
 				}
 				m["Z"+fmt.Sprint(i)+"_SET_EW"] = Attributes{
-					Name:              "Zone " + fmt.Sprint(i) + " E.W. setpoint",
+					Name:              base + " E.W. setpoint",
 					EntityType:        "sensor",
 					DeviceClass:       "temperature",
 					UnitOfMeasurement: "°C",
@@ -417,7 +500,7 @@ func (m ParamsMap) addZones(from map[string]string, static, read, write bool) {
 					CommandTemplate:   "{{ (value * 10) | int }}",
 				}
 				m["Z"+fmt.Sprint(i)+"_SET_CS"] = Attributes{
-					Name:              "Zone " + fmt.Sprint(i) + " C.S. setpoint",
+					Name:              base + " C.S. setpoint",
 					EntityType:        "sensor",
 					DeviceClass:       "temperature",
 					UnitOfMeasurement: "°C",
@@ -426,7 +509,7 @@ func (m ParamsMap) addZones(from map[string]string, static, read, write bool) {
 					CommandTemplate:   "{{ (value * 10) | int }}",
 				}
 				m["Z"+fmt.Sprint(i)+"_SET_ES"] = Attributes{
-					Name:              "Zone " + fmt.Sprint(i) + " E.S. setpoint",
+					Name:              base + " E.S. setpoint",
 					EntityType:        "sensor",
 					DeviceClass:       "temperature",
 					UnitOfMeasurement: "°C",
@@ -437,14 +520,14 @@ func (m ParamsMap) addZones(from map[string]string, static, read, write bool) {
 			}
 			if write {
 				m["Z"+fmt.Sprint(i)+"_FORCING"] = Attributes{
-					Name:            "Zone " + fmt.Sprint(i) + " preset",
+					Name:            base + " preset",
 					Options:         []string{"automatic", "forced off", "forced economy", "forced comfort"},
 					EntityType:      "select",
 					ValueTemplate:   "{% if value == \"1\" %}forced off{% elif value == \"2\" %}forced economy{% elif value == \"3\" %}forced comfort{% else %}automatic{% endif %}",
 					CommandTemplate: "{% if value == \"forced off\" %}1{% elif value == \"forced economy\" %}2{% elif value == \"forced comfort\" %}3{% else %}0{% endif %}",
 				}
 				m["Z"+fmt.Sprint(i)+"_SET_CW"] = Attributes{
-					Name:              "Zone " + fmt.Sprint(i) + " C.W. setpoint",
+					Name:              base + " C.W. setpoint",
 					EntityType:        "number",
 					DeviceClass:       "temperature",
 					UnitOfMeasurement: "°C",
@@ -456,7 +539,7 @@ func (m ParamsMap) addZones(from map[string]string, static, read, write bool) {
 					CommandTemplate:   "{{ (value * 10) | int }}",
 				}
 				m["Z"+fmt.Sprint(i)+"_SET_EW"] = Attributes{
-					Name:              "Zone " + fmt.Sprint(i) + " E.W. setpoint",
+					Name:              base + " E.W. setpoint",
 					EntityType:        "number",
 					DeviceClass:       "temperature",
 					UnitOfMeasurement: "°C",
@@ -468,7 +551,7 @@ func (m ParamsMap) addZones(from map[string]string, static, read, write bool) {
 					CommandTemplate:   "{{ (value * 10) | int }}",
 				}
 				m["Z"+fmt.Sprint(i)+"_SET_CS"] = Attributes{
-					Name:              "Zone " + fmt.Sprint(i) + " C.S. setpoint",
+					Name:              base + " C.S. setpoint",
 					EntityType:        "number",
 					DeviceClass:       "temperature",
 					UnitOfMeasurement: "°C",
@@ -480,7 +563,7 @@ func (m ParamsMap) addZones(from map[string]string, static, read, write bool) {
 					CommandTemplate:   "{{ (value * 10) | int }}",
 				}
 				m["Z"+fmt.Sprint(i)+"_SET_ES"] = Attributes{
-					Name:              "Zone " + fmt.Sprint(i) + " E.S. setpoint",
+					Name:              base + " E.S. setpoint",
 					EntityType:        "number",
 					DeviceClass:       "temperature",
 					UnitOfMeasurement: "°C",
@@ -495,7 +578,7 @@ func (m ParamsMap) addZones(from map[string]string, static, read, write bool) {
 			if from["Z"+fmt.Sprint(i)+"_RH"] != "32769" {
 				if static {
 					m["Z"+fmt.Sprint(i)+"_RH"] = Attributes{
-						Name:              "Zone " + fmt.Sprint(i) + " humidity",
+						Name:              base + " humidity",
 						EntityType:        "sensor",
 						DeviceClass:       "humidity",
 						UnitOfMeasurement: "%",
@@ -506,7 +589,7 @@ func (m ParamsMap) addZones(from map[string]string, static, read, write bool) {
 				}
 				if read {
 					m["Z"+fmt.Sprint(i)+"_SET_RH"] = Attributes{
-						Name:              "Zone " + fmt.Sprint(i) + " humidity setpoint",
+						Name:              base + " humidity setpoint",
 						EntityType:        "sensor",
 						DeviceClass:       "humidity",
 						UnitOfMeasurement: "%",
@@ -517,7 +600,7 @@ func (m ParamsMap) addZones(from map[string]string, static, read, write bool) {
 				}
 				if write {
 					m["Z"+fmt.Sprint(i)+"_SET_RH"] = Attributes{
-						Name:              "Zone " + fmt.Sprint(i) + " humidity setpoint",
+						Name:              base + " humidity setpoint",
 						EntityType:        "number",
 						DeviceClass:       "humidity",
 						UnitOfMeasurement: "%",
@@ -536,10 +619,30 @@ func (m ParamsMap) addZones(from map[string]string, static, read, write bool) {
 
 func (m ParamsMap) addCircuits(from map[string]string, static, read, write bool) {
 	for i := 1; i <= 8; i++ {
-		if from["C"+fmt.Sprint(i)+"_TEMP"] != "32769" {
-			if static {
+		hasTemp := from["C"+fmt.Sprint(i)+"_TEMP"] != "32769"
+		descr := from["C"+fmt.Sprint(i)+"_DESCR"]
+		hasDescr := descr != "0" && descr != ""
+		// A circuit exists if it has a temperature probe OR a configured
+		// descriptor (some circuits drive a pump/valve without a temp probe).
+		if !hasTemp && !hasDescr {
+			continue
+		}
+		base := LabelOr(from, "C"+fmt.Sprint(i)+"_DESCR", "Circuit "+fmt.Sprint(i))
+		if static {
+			m["C"+fmt.Sprint(i)+"_OUTPUT"] = Attributes{
+				Name:          base + " pump",
+				EntityType:    "binary_sensor",
+				ValueTemplate: "{% if value == \"1\" %}on{% else %}off{% endif %}",
+			}
+			m["C"+fmt.Sprint(i)+"_MODE"] = Attributes{
+				Name:           base + " mode",
+				EntityType:     "sensor",
+				EntityCategory: "diagnostic",
+				ValueTemplate:  "{{ value | int }}",
+			}
+			if hasTemp {
 				m["C"+fmt.Sprint(i)+"_TEMP"] = Attributes{
-					Name:              "Circuit " + fmt.Sprint(i) + " temperature",
+					Name:              base + " temperature",
 					EntityType:        "sensor",
 					DeviceClass:       "temperature",
 					UnitOfMeasurement: "°C",
@@ -548,7 +651,7 @@ func (m ParamsMap) addCircuits(from map[string]string, static, read, write bool)
 					CommandTemplate:   "{{ (value * 10) | int }}",
 				}
 				m["C"+fmt.Sprint(i)+"_SET"] = Attributes{
-					Name:              "Circuit " + fmt.Sprint(i) + " temperature setpoint",
+					Name:              base + " temperature setpoint",
 					EntityType:        "sensor",
 					DeviceClass:       "temperature",
 					UnitOfMeasurement: "°C",
@@ -563,22 +666,57 @@ func (m ParamsMap) addCircuits(from map[string]string, static, read, write bool)
 
 func (m ParamsMap) addSources(from map[string]string, static, read, write bool) {
 	for i := 1; i <= 3; i++ {
-		if from["S"+fmt.Sprint(i)+"_DESCR"] != "0" {
+		descr := from["S"+fmt.Sprint(i)+"_DESCR"]
+		if descr != "0" && descr != "" {
+			base := LabelOr(from, "S"+fmt.Sprint(i)+"_DESCR", "Source "+fmt.Sprint(i))
 			if static {
 				m["S"+fmt.Sprint(i)+"_ENABLED"] = Attributes{
-					Name:          "Source " + fmt.Sprint(i) + " enabled",
+					Name:          base + " enabled",
 					EntityType:    "binary_sensor",
 					ValueTemplate: "{% if value == \"1\" %}on{% else %}off{% endif %}",
 				}
 				m["S"+fmt.Sprint(i)+"_OUTPUT"] = Attributes{
-					Name:          "Source " + fmt.Sprint(i) + " state",
+					Name:          base + " state",
 					EntityType:    "binary_sensor",
 					ValueTemplate: "{% if value == \"1\" %}on{% else %}off{% endif %}",
 				}
 				m["S"+fmt.Sprint(i)+"_AUXOUTPUT"] = Attributes{
-					Name:          "Source " + fmt.Sprint(i) + " auxiliary state",
+					Name:          base + " auxiliary state",
 					EntityType:    "binary_sensor",
 					ValueTemplate: "{% if value == \"1\" %}on{% else %}off{% endif %}",
+				}
+				m["S"+fmt.Sprint(i)+"_PRIORITY"] = Attributes{
+					Name:           base + " priority",
+					EntityType:     "sensor",
+					EntityCategory: "diagnostic",
+					ValueTemplate:  "{{ value | int }}",
+				}
+				// 0-10V modulation output (raw word; scaling not yet confirmed).
+				m["S"+fmt.Sprint(i)+"_OUTPUT_010"] = Attributes{
+					Name:           base + " modulation",
+					EntityType:     "sensor",
+					EntityCategory: "diagnostic",
+					ValueTemplate:  "{{ value | int }}",
+				}
+				if from["S"+fmt.Sprint(i)+"_TEMP"] != "32769" {
+					m["S"+fmt.Sprint(i)+"_TEMP"] = Attributes{
+						Name:              base + " temperature",
+						EntityType:        "sensor",
+						DeviceClass:       "temperature",
+						UnitOfMeasurement: "°C",
+						StateClass:        "measurement",
+						ValueTemplate:     "{{ value | int / 10 }}",
+					}
+				}
+				if from["S"+fmt.Sprint(i)+"_AUXTEMP"] != "32769" {
+					m["S"+fmt.Sprint(i)+"_AUXTEMP"] = Attributes{
+						Name:              base + " auxiliary temperature",
+						EntityType:        "sensor",
+						DeviceClass:       "temperature",
+						UnitOfMeasurement: "°C",
+						StateClass:        "measurement",
+						ValueTemplate:     "{{ value | int / 10 }}",
+					}
 				}
 			}
 		}
@@ -738,6 +876,19 @@ func (m ParamsMap) addEnergymeters(from map[string]string, static, read, write b
 				ValueTemplate:     "{{ value | int / 10 }}",
 				CommandTemplate:   "",
 			}
+			// High word of the import accumulator. ACCLO wraps at 6553.5 kWh;
+			// the true total is (ACCHI*65536+ACCLO)/10. The add-on publishes one
+			// value per topic, so this is exposed as a raw diagnostic; combine it
+			// with ACCLO in a Home Assistant template sensor. Gated on the meter
+			// being present so sentinel (32769) phantom meters stay hidden.
+			if from["EM"+fmt.Sprint(i)+"_ACCLO"] != "32769" {
+				m["EM"+fmt.Sprint(i)+"_ACCHI"] = Attributes{
+					Name:           "Energy meter " + fmt.Sprint(i) + " total energy import (high word)",
+					EntityType:     "sensor",
+					EntityCategory: "diagnostic",
+					ValueTemplate:  "{{ value | int }}",
+				}
+			}
 			if i == 4 {
 				m["EM"+fmt.Sprint(i)+"_ACC2LO"] = Attributes{
 					Name:              "Energy meter " + fmt.Sprint(i) + " total energy export",
@@ -747,6 +898,14 @@ func (m ParamsMap) addEnergymeters(from map[string]string, static, read, write b
 					StateClass:        "total_increasing",
 					ValueTemplate:     "{{ value | int / 10 }}",
 					CommandTemplate:   "",
+				}
+				if from["EM"+fmt.Sprint(i)+"_ACC2LO"] != "32769" {
+					m["EM"+fmt.Sprint(i)+"_ACC2HI"] = Attributes{
+						Name:           "Energy meter " + fmt.Sprint(i) + " total energy export (high word)",
+						EntityType:     "sensor",
+						EntityCategory: "diagnostic",
+						ValueTemplate:  "{{ value | int }}",
+					}
 				}
 			}
 		}
@@ -763,6 +922,12 @@ func (m ParamsMap) addCalendars(from map[string]string, static, read, write bool
 					EntityType:    "sensor",
 					DeviceClass:   "enum",
 					ValueTemplate: "{% if value == \"1\" %}off{% elif value == \"2\" %}economy{% elif value == \"3\" %}comfort{% else %}{{ value }}{% endif %}",
+				}
+				m["MT"+fmt.Sprint(i)+"_XREF"] = Attributes{
+					Name:           "Calendar " + fmt.Sprint(i) + " reference",
+					EntityType:     "sensor",
+					EntityCategory: "diagnostic",
+					ValueTemplate:  "{{ value | int }}",
 				}
 			}
 			if read {
@@ -782,6 +947,88 @@ func (m ParamsMap) addCalendars(from map[string]string, static, read, write bool
 					CommandTemplate: "{% if value == \"forced off\" %}1{% elif value == \"forced economy\" %}2{% elif value == \"forced comfort\" %}3{% else %}0{% endif %}",
 				}
 
+			}
+		}
+	}
+}
+
+// addAlarms exposes the station-wide alarm summary and the raw alarm bitmasks.
+func (m ParamsMap) addAlarms(from map[string]string, static, read, write bool) {
+	if static {
+		if from["ANY_ALARM"] != "" {
+			m["ANY_ALARM"] = Attributes{
+				Name:          "Alarm active",
+				EntityType:    "binary_sensor",
+				DeviceClass:   "problem",
+				ValueTemplate: "{% if value == \"0\" %}off{% else %}on{% endif %}",
+			}
+		}
+		for _, s := range []string{"A", "B", "C"} {
+			if from["ALARM_"+s] == "" {
+				continue
+			}
+			m["ALARM_"+s] = Attributes{
+				Name:           "Alarm bitmask " + s,
+				EntityType:     "sensor",
+				EntityCategory: "diagnostic",
+				ValueTemplate:  "{{ value | int }}",
+			}
+		}
+	}
+}
+
+// addSolar exposes the solar-thermal subsystem (sensors, pump, status). 255 on
+// the pump output marks the solar function as not configured, so the whole
+// family is gated on it and stays absent on stations without solar.
+func (m ParamsMap) addSolar(from map[string]string, static, read, write bool) {
+	if from["SOLAR_PUMP"] == "255" || from["SOLAR_PUMP"] == "" {
+		return
+	}
+	if static {
+		m["SOLAR_PUMP"] = Attributes{
+			Name:          "Solar pump",
+			EntityType:    "binary_sensor",
+			ValueTemplate: "{% if value == \"1\" %}on{% else %}off{% endif %}",
+		}
+		m["SOLAR_STATUS"] = Attributes{
+			Name:           "Solar status",
+			EntityType:     "sensor",
+			EntityCategory: "diagnostic",
+			ValueTemplate:  "{{ value | int }}",
+		}
+		for i := 1; i <= 5; i++ {
+			if from["SOLAR_S"+fmt.Sprint(i)] != "32769" {
+				m["SOLAR_S"+fmt.Sprint(i)] = Attributes{
+					Name:              "Solar temperature " + fmt.Sprint(i),
+					EntityType:        "sensor",
+					DeviceClass:       "temperature",
+					UnitOfMeasurement: "°C",
+					StateClass:        "measurement",
+					ValueTemplate:     "{{ value | int / 10 }}",
+				}
+			}
+		}
+	}
+}
+
+// addDevice exposes the firmware/release identifiers as diagnostic sensors. The
+// combined sw_version is also published in the device block (see SwVersion).
+func (m ParamsMap) addDevice(from map[string]string, static, read, write bool) {
+	if static {
+		if from["FIRMWARE_RELEASE"] != "" {
+			m["FIRMWARE_RELEASE"] = Attributes{
+				Name:           "Firmware release",
+				EntityType:     "sensor",
+				EntityCategory: "diagnostic",
+				ValueTemplate:  "{{ value | int }}",
+			}
+		}
+		if from["DOT_RELEASE"] != "" {
+			m["DOT_RELEASE"] = Attributes{
+				Name:           "DOT release",
+				EntityType:     "sensor",
+				EntityCategory: "diagnostic",
+				ValueTemplate:  "{{ value | int }}",
 			}
 		}
 	}

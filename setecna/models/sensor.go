@@ -7,6 +7,7 @@ type Sensor struct {
 		Name             string   `json:"name"`
 		Identifiers      []string `json:"identifiers"`
 		ConfigurationURL string   `json:"configuration_url,omitempty"`
+		SwVersion        string   `json:"sw_version,omitempty"`
 	} `json:"device"`
 	AvailabilityTopic string `json:"availability_topic,omitempty"`
 	DeviceClass       string `json:"device_class,omitempty"`
@@ -25,6 +26,7 @@ func (s *Sensor) Init(systemID, sensorID string, attributes Attributes) {
 	s.Device.Name = systemID
 	s.Device.Identifiers = []string{systemID}
 	s.Device.ConfigurationURL = "https://www.s5a.eu/station/" + systemID
+	s.Device.SwVersion = SwVersion
 	s.AvailabilityTopic = "setecna/" + systemID + "/status"
 	s.DeviceClass = attributes.DeviceClass
 	s.EntityCategory = attributes.EntityCategory

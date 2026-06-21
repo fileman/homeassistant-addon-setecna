@@ -7,6 +7,7 @@ type BinarySensor struct {
 		Name             string   `json:"name"`
 		Identifiers      []string `json:"identifiers"`
 		ConfigurationURL string   `json:"configuration_url,omitempty"`
+		SwVersion        string   `json:"sw_version,omitempty"`
 	} `json:"device"`
 	AvailabilityTopic string `json:"availability_topic,omitempty"`
 	DeviceClass       string `json:"device_class,omitempty"`
@@ -25,6 +26,7 @@ func (bs *BinarySensor) Init(systemID, sensorID string, attributes Attributes) {
 	bs.Device.Name = systemID
 	bs.Device.Identifiers = []string{systemID}
 	bs.Device.ConfigurationURL = "https://www.s5a.eu/station/" + systemID
+	bs.Device.SwVersion = SwVersion
 	bs.AvailabilityTopic = "setecna/" + systemID + "/status"
 	bs.DeviceClass = attributes.DeviceClass
 	bs.EntityCategory = attributes.EntityCategory

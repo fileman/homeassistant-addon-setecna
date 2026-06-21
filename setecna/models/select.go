@@ -9,6 +9,7 @@ type Select struct {
 		Name             string   `json:"name"`
 		Identifiers      []string `json:"identifiers"`
 		ConfigurationURL string   `json:"configuration_url,omitempty"`
+		SwVersion        string   `json:"sw_version,omitempty"`
 	} `json:"device"`
 	AvailabilityTopic string   `json:"availability_topic,omitempty"`
 	EntityCategory    string   `json:"entity_category"`
@@ -27,6 +28,7 @@ func (s *Select) Init(systemID, sensorID string, attributes Attributes) {
 	s.Device.Name = systemID
 	s.Device.Identifiers = []string{systemID}
 	s.Device.ConfigurationURL = "https://www.s5a.eu/station/" + systemID
+	s.Device.SwVersion = SwVersion
 	s.AvailabilityTopic = "setecna/" + systemID + "/status"
 	s.EntityCategory = "config"
 	s.Name = attributes.Name

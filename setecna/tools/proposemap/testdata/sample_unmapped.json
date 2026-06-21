@@ -1,0 +1,16 @@
+[
+  {"Id": "EM1_ACCHI", "V": "3"},
+  {"Id": "EM2_ACCHI", "V": "0"},
+  {"Id": "EM4_ACC2HI", "V": "1"},
+  {"Id": "FAIN1_DESCR", "V": "1"},
+  {"Id": "S1_FAULT", "V": "0"},
+  {"Id": "S1_DESCR", "V": "5"},
+  {"Id": "C1_PUMP", "V": "1"},
+  {"Id": "SW_VERSION", "V": "2.14.3"},
+  {"Id": "SERIAL", "V": "STC-000123456"},
+  {"Id": "MT1_XREF", "V": "7"},
+  {"Id": "Z1_SENSOR_CHN", "V": "2"},
+  {"Id": "FOO_BAR", "V": "42"},
+  {"Id": "WIDGET_FROBNICATE", "V": "0"},
+  {"Id": "QUUX_PARAM_9", "V": "-1"}
+]

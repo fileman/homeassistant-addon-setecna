@@ -9,6 +9,7 @@ type Number struct {
 		Name             string   `json:"name"`
 		Identifiers      []string `json:"identifiers"`
 		ConfigurationURL string   `json:"configuration_url,omitempty"`
+		SwVersion        string   `json:"sw_version,omitempty"`
 	} `json:"device"`
 	AvailabilityTopic string  `json:"availability_topic,omitempty"`
 	DeviceClass       string  `json:"device_class,omitempty"`
@@ -32,6 +33,7 @@ func (n *Number) Init(systemID, sensorID string, attributes Attributes) {
 	n.Device.Name = systemID
 	n.Device.Identifiers = []string{systemID}
 	n.Device.ConfigurationURL = "https://www.s5a.eu/station/" + systemID
+	n.Device.SwVersion = SwVersion
 	n.AvailabilityTopic = "setecna/" + systemID + "/status"
 	n.DeviceClass = attributes.DeviceClass
 	n.EntityCategory = "config"

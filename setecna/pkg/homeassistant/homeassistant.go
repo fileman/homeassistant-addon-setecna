@@ -22,9 +22,10 @@ func CreateClimates(responseMap map[string]string, systemID string) (msgs mqtt.M
 		if responseMap["Z"+fmt.Sprint(i)+"_SENSOR_CHN"] != "0" {
 			var j []byte
 			var err error = nil
+			zoneName := models.LabelOr(responseMap, "Z"+fmt.Sprint(i)+"_DESCR", "Zone "+fmt.Sprint(i))
 			if responseMap["Z"+fmt.Sprint(i)+"_RH"] != "32769" {
 				var climate = new(models.ClimateWithHumidity)
-				climate.Init(i, systemID, systemSeason)
+				climate.Init(i, systemID, systemSeason, zoneName)
 
 				j, err = json.Marshal(climate)
 				if err != nil {
@@ -33,7 +34,7 @@ func CreateClimates(responseMap map[string]string, systemID string) (msgs mqtt.M
 				}
 			} else {
 				var climate = new(models.ClimateWithoutHumidity)
-				climate.Init(i, systemID, systemSeason)
+				climate.Init(i, systemID, systemSeason, zoneName)
 
 				j, err = json.Marshal(climate)
 				if err != nil {

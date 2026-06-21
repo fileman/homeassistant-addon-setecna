@@ -1,0 +1,14 @@
+{
+  "Status": "ok",
+  "Timestamp": "2026-06-21 12:00:00.000000+02",
+  "Latest": "2026-06-21 11:59:58.000000+02",
+  "Rows": 6,
+  "Data": [
+    { "Id": "EM1_ACCHI", "V": 3 },
+    { "Id": "GLOBAL_T_EXT", "V": 215 },
+    { "Id": "Z1_SENSOR_CHN", "V": 2 },
+    { "Id": "S2_FAULT", "V": 0 },
+    { "Id": "FAIN3_DESCR", "V": null },
+    { "Id": "DRYER_STAGE", "V": 1 }
+  ]
+}

@@ -36,6 +36,14 @@ Once installed use the "configuration" tab to insert the following informations:
     - `ON` = The addon will match Home Assistant's built-in entities such as `climate` or `water_heater` with REG systems's zones and DWH parameters.
     - `OFF` = Home Assistant's built-in entities will not be created by the add-on (advanced users can still create them in their homeassistant's configuration.yaml)
 
+### Entity names
+
+Zones, circuits, sources and analog inputs are named after the **free-text labels you set in the Setecna web-interface** (so a zone shows as the name you gave it instead of *"Zone 5"*). Items without a custom label fall back to a generic name. Renaming a zone in the web-interface changes the Home Assistant friendly name, but not the entity ID, so your automations and dashboards keep working.
+
+### Energy meters (totals above 6553.5 kWh)
+
+Each energy meter's total is split into a low word (`..._ACCLO`, the primary `kWh` sensor) and a diagnostic high word (`..._ACCHI`). The low word wraps at 6553.5 kWh; for the full total, create a Home Assistant template sensor combining them: `(ACCHI * 65536 + ACCLO) / 10`.
+
 ### MQTT broker (manual)
 
 By default the add-on auto-detects the MQTT broker from the **Mosquitto broker** add-on. If you use an external broker that is not published as a Home Assistant service (e.g. a standalone broker, or one configured only through the MQTT *integration*), set these so the add-on can connect:

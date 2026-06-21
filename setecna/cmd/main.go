@@ -110,6 +110,10 @@ func do(m *mqtt.MqttServer, s *scraper.Scraper) {
 		responseMap[num.ID] = string(num.V)
 	}
 
+	// Populate the Home Assistant device-block sw_version from the station's
+	// firmware/release identifiers before any entity discovery config is built.
+	models.SwVersion = formatSwVersion(responseMap)
+
 	// DEBUG: dump the parameters returned by the station that the add-on does
 	// not (yet) map to an entity, so new parameters can be discovered/mapped.
 	if debugDump {
@@ -225,5 +229,23 @@ func do(m *mqtt.MqttServer, s *scraper.Scraper) {
 		s.AskRefresh()
 		time.Sleep(time.Second * 20)
 		response, fetchError = s.Fetch()
+	}
+}
+
+// formatSwVersion builds the device-block sw_version from the station's firmware
+// and DOT release identifiers, e.g. "FW 5170 / DOT 53577". Missing values are
+// omitted; returns "" when neither is present.
+func formatSwVersion(m map[string]string) string {
+	fw := m["FIRMWARE_RELEASE"]
+	dot := m["DOT_RELEASE"]
+	switch {
+	case fw != "" && dot != "":
+		return "FW " + fw + " / DOT " + dot
+	case fw != "":
+		return "FW " + fw
+	case dot != "":
+		return "DOT " + dot
+	default:
+		return ""
 	}
 }

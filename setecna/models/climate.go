@@ -21,6 +21,7 @@ type ClimateWithHumidity struct {
 		Model        string   `json:"model"`
 		Name         string   `json:"name"`
 		Identifiers  []string `json:"identifiers"`
+		SwVersion    string   `json:"sw_version,omitempty"`
 	} `json:"device"`
 	AvailabilityTopic              string   `json:"availability_topic,omitempty"`
 	EntityCategory                 string   `json:"entity_category,omitempty"`
@@ -55,19 +56,20 @@ type ClimateWithHumidity struct {
 	MaxTemp                        int      `json:"max_temp"`
 }
 
-func (c *ClimateWithHumidity) Init(number int, systemID string, season helpers.Season) {
+func (c *ClimateWithHumidity) Init(number int, systemID string, season helpers.Season, name string) {
 	// c.ActionTemplate = "homeassistant/binary_sensor/" + systemID + "_Z" + fmt.Sprint(number) + "_OUTPUT"
 	// if season == helpers.Summer {
 	// 	c.ActionTopic = "{% if value == \"1\" %}cooling{% else %}off{% endif %}"
 	// } else {
 	// 	c.ActionTopic = "{% if value == \"1\" %}heating{% else %}off{% endif %}"
 	// }
-	c.Name = "Zone " + fmt.Sprint(number)
+	c.Name = name
 	c.UniqueID = systemID + "_zone_" + fmt.Sprint(number)
 	c.Device.Manufacturer = "Setecna"
 	c.Device.Model = "REG system"
 	c.Device.Name = systemID
 	c.Device.Identifiers = []string{systemID}
+	c.Device.SwVersion = SwVersion
 	c.AvailabilityTopic = "setecna/" + systemID + "/status"
 	c.ModeStateTopic = "homeassistant/binary_sensor/" + systemID + "_Z" + fmt.Sprint(number) + "_OUTPUT"
 	if season == helpers.Summer {
@@ -126,6 +128,7 @@ type ClimateWithoutHumidity struct {
 		Model        string   `json:"model"`
 		Name         string   `json:"name"`
 		Identifiers  []string `json:"identifiers"`
+		SwVersion    string   `json:"sw_version,omitempty"`
 	} `json:"device"`
 	AvailabilityTopic              string   `json:"availability_topic,omitempty"`
 	EntityCategory                 string   `json:"entity_category,omitempty"`
@@ -152,19 +155,20 @@ type ClimateWithoutHumidity struct {
 	MaxTemp                        int      `json:"max_temp"`
 }
 
-func (c *ClimateWithoutHumidity) Init(number int, systemID string, season helpers.Season) {
+func (c *ClimateWithoutHumidity) Init(number int, systemID string, season helpers.Season, name string) {
 	// c.ActionTemplate = "homeassistant/binary_sensor/" + systemID + "_Z" + fmt.Sprint(number) + "_OUTPUT"
 	// if season == helpers.Summer {
 	// 	c.ActionTopic = "{% if value == \"1\" %}cooling{% else %}off{% endif %}"
 	// } else {
 	// 	c.ActionTopic = "{% if value == \"1\" %}heating{% else %}off{% endif %}"
 	// }
-	c.Name = "Zone " + fmt.Sprint(number)
+	c.Name = name
 	c.UniqueID = systemID + "_zone_" + fmt.Sprint(number)
 	c.Device.Manufacturer = "Setecna"
 	c.Device.Model = "REG system"
 	c.Device.Name = systemID
 	c.Device.Identifiers = []string{systemID}
+	c.Device.SwVersion = SwVersion
 	c.AvailabilityTopic = "setecna/" + systemID + "/status"
 	c.ModeStateTopic = "homeassistant/binary_sensor/" + systemID + "_Z" + fmt.Sprint(number) + "_OUTPUT"
 	if season == helpers.Summer {
