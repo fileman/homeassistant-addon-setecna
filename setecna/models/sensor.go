@@ -2,13 +2,15 @@ package models
 
 type Sensor struct {
 	Device struct {
-		Manufacturer string   `json:"manufacturer"`
-		Model        string   `json:"model"`
-		Name         string   `json:"name"`
-		Identifiers  []string `json:"identifiers"`
+		Manufacturer     string   `json:"manufacturer"`
+		Model            string   `json:"model"`
+		Name             string   `json:"name"`
+		Identifiers      []string `json:"identifiers"`
+		ConfigurationURL string   `json:"configuration_url,omitempty"`
 	} `json:"device"`
+	AvailabilityTopic string `json:"availability_topic,omitempty"`
 	DeviceClass       string `json:"device_class,omitempty"`
-	EntityCategory    string `json:"entity_category"`
+	EntityCategory    string `json:"entity_category,omitempty"`
 	Name              string `json:"name"`
 	StateClass        string `json:"state_class,omitempty"`
 	StateTopic        string `json:"state_topic,omitempty"`
@@ -22,8 +24,10 @@ func (s *Sensor) Init(systemID, sensorID string, attributes Attributes) {
 	s.Device.Model = "REG system"
 	s.Device.Name = systemID
 	s.Device.Identifiers = []string{systemID}
+	s.Device.ConfigurationURL = "https://www.s5a.eu/station/" + systemID
+	s.AvailabilityTopic = "setecna/" + systemID + "/status"
 	s.DeviceClass = attributes.DeviceClass
-	s.EntityCategory = "diagnostic"
+	s.EntityCategory = attributes.EntityCategory
 	s.Name = attributes.Name
 	s.StateClass = attributes.StateClass
 	s.StateTopic = "homeassistant/" + attributes.EntityType + "/" + systemID + "_" + sensorID

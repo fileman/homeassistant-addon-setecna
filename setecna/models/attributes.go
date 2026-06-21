@@ -1,11 +1,15 @@
 package models
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+)
 
 type Attributes struct {
 	CommandTemplate   string   `json:"command_template"`
 	DeviceClass       string   `json:"device_class"`
 	EntityType        string   `json:"entity_type"`
+	EntityCategory    string   `json:"entity_category"`
 	Max               float64  `json:"max"`
 	Min               float64  `json:"min"`
 	Name              string   `json:"name"`
@@ -31,6 +35,7 @@ func (m ParamsMap) AddEnabledParams(from map[string]string, isReadOnly bool) {
 	m.addDehumidifier(from, true, isReadOnly, !isReadOnly)
 	m.addEnergymeters(from, true, isReadOnly, !isReadOnly)
 	m.addCalendars(from, true, isReadOnly, !isReadOnly)
+	m.markDiagnostics()
 }
 
 func (m ParamsMap) AddDisabledParams(from map[string]string, isReadOnly bool) {
@@ -45,6 +50,43 @@ func (m ParamsMap) AddDisabledParams(from map[string]string, isReadOnly bool) {
 	m.addDehumidifier(from, false, !isReadOnly, isReadOnly)
 	m.addEnergymeters(from, false, !isReadOnly, isReadOnly)
 	m.addCalendars(from, false, !isReadOnly, isReadOnly)
+	m.markDiagnostics()
+}
+
+// markDiagnostics tags non-primary readouts (alarms, generic digital inputs,
+// tuning/hysteresis values, configured fan flow rates and the last-update
+// timestamp) as diagnostic entities. Primary measurements (temperatures,
+// humidity, power, energy, operational states) are left with no entity_category
+// so Home Assistant treats them as the device's primary entities. Number and
+// select entities set their own category and ignore this field.
+func (m ParamsMap) markDiagnostics() {
+	for id, attr := range m {
+		if isDiagnostic(id) {
+			attr.EntityCategory = "diagnostic"
+			m[id] = attr
+		}
+	}
+}
+
+func isDiagnostic(id string) bool {
+	switch {
+	case id == "LAST_UPDATE":
+		return true
+	case strings.HasPrefix(id, "FDIN"):
+		return true
+	case strings.HasPrefix(id, "FALDIN"):
+		return true
+	case strings.Contains(id, "_HYST"):
+		return true
+	case strings.Contains(id, "_DEICE_TRESH"):
+		return true
+	case id == "ACS_SET_DELTA":
+		return true
+	case strings.Contains(id, "_SPEED_"):
+		return true
+	default:
+		return false
+	}
 }
 
 func (m ParamsMap) addLastUpdate(from map[string]string, static, read, write bool) {

@@ -1,42 +1,83 @@
 #!/usr/bin/with-contenv bashio
 # ==============================================================================
-# Start the service
+# Start the Setecna service
 # s6-overlay docs: https://github.com/just-containers/s6-overlay
 # ==============================================================================
-
-# Add your code here
 
 # Declare variables
 declare REG_SYSTEM_ID
 declare REG_USER
 declare REG_PASSWORD
 declare MQTT_HOST
+declare MQTT_PORT
 declare MQTT_USER
 declare MQTT_PASSWORD
 declare ADV_INT
 declare READONLY
+declare DEBUG_DUMP
 
-## Get the 'systemID' key from the user config options.
+## Get the user config options.
 REG_SYSTEM_ID="$(bashio::config 'systemID')"
 REG_USER="$(bashio::config 'username')"
 REG_PASSWORD="$(bashio::config 'password')"
-MQTT_HOST="$(bashio::services mqtt 'host')"
-MQTT_USER="$(bashio::services mqtt 'username')"
-MQTT_PASSWORD="$(bashio::services mqtt 'password')"
 ADV_INT="$(bashio::config 'adv_int')"
 READONLY="$(bashio::config 'readonly')"
+DEBUG_DUMP="$(bashio::config 'debug_dump')"
+
+# ------------------------------------------------------------------------------
+# Resolve the MQTT broker connection settings.
+#
+# Priority:
+#   1. Manual MQTT options set by the user (mqtt_host/...) -> use those.
+#   2. Otherwise, the Supervisor-provided MQTT service     -> auto-discover.
+#   3. Otherwise                                           -> fail with guidance.
+#
+# NOTE: the Supervisor only publishes the "mqtt" service when a provider add-on
+# (the official "Mosquitto broker" add-on, which declares `services: mqtt:provide`)
+# is installed AND running. The MQTT *integration* or brokers like EMQX do NOT
+# populate it, so `bashio::services mqtt` would fail with
+# "Got unexpected response from the API: Service not enabled". Guarding with
+# `bashio::services.available` is what prevents that hard crash.
+# ------------------------------------------------------------------------------
+if bashio::config.has_value 'mqtt_host'; then
+    bashio::log.info "Using manually configured MQTT broker."
+    MQTT_HOST="$(bashio::config 'mqtt_host')"
+    MQTT_PORT="$(bashio::config 'mqtt_port')"
+    MQTT_USER="$(bashio::config 'mqtt_user')"
+    MQTT_PASSWORD="$(bashio::config 'mqtt_password')"
+elif bashio::services.available 'mqtt'; then
+    bashio::log.info "MQTT service found via Supervisor, fetching credentials..."
+    MQTT_HOST="$(bashio::services mqtt 'host')"
+    MQTT_PORT="$(bashio::services mqtt 'port')"
+    MQTT_USER="$(bashio::services mqtt 'username')"
+    MQTT_PASSWORD="$(bashio::services mqtt 'password')"
+else
+    bashio::log.fatal "No MQTT broker available."
+    bashio::log.fatal "Install and START the official 'Mosquitto broker' add-on"
+    bashio::log.fatal "(it registers the Supervisor MQTT service), OR set the"
+    bashio::log.fatal "mqtt_host / mqtt_user / mqtt_password options manually."
+    bashio::log.fatal "Note: the MQTT *integration* and EMQX do NOT publish the"
+    bashio::log.fatal "Supervisor MQTT service and cannot satisfy this add-on."
+    bashio::exit.nok
+fi
+
+# Fall back to the standard MQTT port when none was provided.
+if bashio::var.is_empty "${MQTT_PORT}"; then
+    MQTT_PORT="1883"
+fi
 
 export REG_SYSTEM_ID
 export REG_USER
 export REG_PASSWORD
 export MQTT_HOST
+export MQTT_PORT
 export MQTT_USER
 export MQTT_PASSWORD
 export ADV_INT
 export READONLY
+export DEBUG_DUMP
 
-## Print the systemID the user supplied, defaults to ""
-bashio::log.info "${systemID:=""}"
+bashio::log.info "Starting Setecna add-on (systemID: ${REG_SYSTEM_ID}, broker: ${MQTT_HOST}:${MQTT_PORT})"
 
-## Run your program
+## Run the program
 exec /usr/bin/app
