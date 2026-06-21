@@ -1,4 +1,4 @@
 # https://developers.home-assistant.io/docs/add-ons/repository#repository-configuration
-name: Setecna REG system integration Home Assistant add-on repository
-url: 'https://github.com/Ingordigia/homeassistant-addon-setecna.git'
-maintainer: Ingordigia
+name: Setecna REG system (fileman fork)
+url: 'https://github.com/fileman/homeassistant-addon-setecna'
+maintainer: fileman
