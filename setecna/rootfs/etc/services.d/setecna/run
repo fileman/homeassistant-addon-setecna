@@ -14,6 +14,7 @@ declare MQTT_USER
 declare MQTT_PASSWORD
 declare ADV_INT
 declare READONLY
+declare DEBUG_DUMP
 
 ## Get the user config options.
 REG_SYSTEM_ID="$(bashio::config 'systemID')"
@@ -21,6 +22,7 @@ REG_USER="$(bashio::config 'username')"
 REG_PASSWORD="$(bashio::config 'password')"
 ADV_INT="$(bashio::config 'adv_int')"
 READONLY="$(bashio::config 'readonly')"
+DEBUG_DUMP="$(bashio::config 'debug_dump')"
 
 # ------------------------------------------------------------------------------
 # Resolve the MQTT broker connection settings.
@@ -73,6 +75,7 @@ export MQTT_USER
 export MQTT_PASSWORD
 export ADV_INT
 export READONLY
+export DEBUG_DUMP
 
 bashio::log.info "Starting Setecna add-on (systemID: ${REG_SYSTEM_ID}, broker: ${MQTT_HOST}:${MQTT_PORT})"
 

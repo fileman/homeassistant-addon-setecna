@@ -4,11 +4,13 @@ type Number struct {
 	CommandTemplate string `json:"command_template"`
 	CommandTopic    string `json:"command_topic"`
 	Device          struct {
-		Manufacturer string   `json:"manufacturer"`
-		Model        string   `json:"model"`
-		Name         string   `json:"name"`
-		Identifiers  []string `json:"identifiers"`
+		Manufacturer     string   `json:"manufacturer"`
+		Model            string   `json:"model"`
+		Name             string   `json:"name"`
+		Identifiers      []string `json:"identifiers"`
+		ConfigurationURL string   `json:"configuration_url,omitempty"`
 	} `json:"device"`
+	AvailabilityTopic string  `json:"availability_topic,omitempty"`
 	DeviceClass       string  `json:"device_class,omitempty"`
 	EntityCategory    string  `json:"entity_category"`
 	Min               float64 `json:"min"`
@@ -23,12 +25,14 @@ type Number struct {
 }
 
 func (n *Number) Init(systemID, sensorID string, attributes Attributes) {
-	n.CommandTemplate = "{{ (value * 10) | int }}"
+	n.CommandTemplate = attributes.CommandTemplate
 	n.CommandTopic = "homeassistant/" + attributes.EntityType + "/" + systemID + "_" + sensorID + "/set"
 	n.Device.Manufacturer = "Setecna"
 	n.Device.Model = "REG system"
 	n.Device.Name = systemID
 	n.Device.Identifiers = []string{systemID}
+	n.Device.ConfigurationURL = "https://www.s5a.eu/station/" + systemID
+	n.AvailabilityTopic = "setecna/" + systemID + "/status"
 	n.DeviceClass = attributes.DeviceClass
 	n.EntityCategory = "config"
 	n.Min = attributes.Min

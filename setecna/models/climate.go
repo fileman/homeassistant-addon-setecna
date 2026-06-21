@@ -22,7 +22,8 @@ type ClimateWithHumidity struct {
 		Name         string   `json:"name"`
 		Identifiers  []string `json:"identifiers"`
 	} `json:"device"`
-	EntityCategory                 string   `json:"entity_category"`
+	AvailabilityTopic              string   `json:"availability_topic,omitempty"`
+	EntityCategory                 string   `json:"entity_category,omitempty"`
 	ModeStateTopic                 string   `json:"mode_state_topic"`
 	ModeStateTemplate              string   `json:"mode_state_template"`
 	Modes                          []string `json:"modes"`
@@ -67,7 +68,7 @@ func (c *ClimateWithHumidity) Init(number int, systemID string, season helpers.S
 	c.Device.Model = "REG system"
 	c.Device.Name = systemID
 	c.Device.Identifiers = []string{systemID}
-	c.EntityCategory = "config"
+	c.AvailabilityTopic = "setecna/" + systemID + "/status"
 	c.ModeStateTopic = "homeassistant/binary_sensor/" + systemID + "_Z" + fmt.Sprint(number) + "_OUTPUT"
 	if season == helpers.Summer {
 		c.ModeStateTemplate = "{% if value == \"1\" %}cool{% else %}off{% endif %}"
@@ -126,7 +127,8 @@ type ClimateWithoutHumidity struct {
 		Name         string   `json:"name"`
 		Identifiers  []string `json:"identifiers"`
 	} `json:"device"`
-	EntityCategory                 string   `json:"entity_category"`
+	AvailabilityTopic              string   `json:"availability_topic,omitempty"`
+	EntityCategory                 string   `json:"entity_category,omitempty"`
 	ModeStateTopic                 string   `json:"mode_state_topic"`
 	ModeStateTemplate              string   `json:"mode_state_template"`
 	Modes                          []string `json:"modes"`
@@ -158,12 +160,12 @@ func (c *ClimateWithoutHumidity) Init(number int, systemID string, season helper
 	// 	c.ActionTopic = "{% if value == \"1\" %}heating{% else %}off{% endif %}"
 	// }
 	c.Name = "Zone " + fmt.Sprint(number)
-	c.UniqueID = "zone_" + fmt.Sprint(number)
+	c.UniqueID = systemID + "_zone_" + fmt.Sprint(number)
 	c.Device.Manufacturer = "Setecna"
 	c.Device.Model = "REG system"
 	c.Device.Name = systemID
 	c.Device.Identifiers = []string{systemID}
-	c.EntityCategory = "config"
+	c.AvailabilityTopic = "setecna/" + systemID + "/status"
 	c.ModeStateTopic = "homeassistant/binary_sensor/" + systemID + "_Z" + fmt.Sprint(number) + "_OUTPUT"
 	if season == helpers.Summer {
 		c.ModeStateTemplate = "{% if value == \"1\" %}cool{% else %}off{% endif %}"

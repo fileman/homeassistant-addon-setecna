@@ -43,3 +43,9 @@ By default the add-on auto-detects the MQTT broker from the **Mosquitto broker**
 - `mqtt_host`, `mqtt_port`, `mqtt_user`, `mqtt_password`
 
 Leave them empty to use auto-detection. When `mqtt_host` is set, the manual values take precedence over auto-detection.
+
+### Debugging / discovering more data
+
+- `debug_dump`:
+    - `ON` = on the next start, the add-on writes two files to your Home Assistant `/share` folder: `setecna_getres_dump.json` (the full raw data the station returns) and `setecna_unmapped_ids.json` (parameters the add-on does **not** currently expose as entities). These help identify additional data that could be integrated. **Turn it back OFF after capturing** — the dump contains your station telemetry and `systemID`, so review/redact before sharing it publicly.
+    - `OFF` = no debug files are written (default).

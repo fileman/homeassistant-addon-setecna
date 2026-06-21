@@ -45,6 +45,7 @@ func CreateClimates(responseMap map[string]string, systemID string) (msgs mqtt.M
 				Topic:   "homeassistant/climate/" + systemID + "_zone_" + fmt.Sprint(i) + "/config",
 				Message: string(j),
 				Qos:     0,
+				Retain:  true,
 			}
 			msgs = append(msgs, message)
 		}
@@ -59,6 +60,7 @@ func RemoveClimates(responseMap map[string]string, systemID string) (msgs mqtt.M
 				Topic:   "homeassistant/climate/" + systemID + "_zone_" + fmt.Sprint(i) + "/config",
 				Message: "",
 				Qos:     0,
+				Retain:  true,
 			}
 			msgs = append(msgs, message)
 		}

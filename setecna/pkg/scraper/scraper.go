@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/cookiejar"
 	"net/url"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -129,6 +130,8 @@ type Scraper struct {
 	askRefreshURL   string
 	pushUpdatesURL  string
 	lastFetch       string
+	debugDump       bool
+	dumped          bool
 }
 
 func (s *Scraper) push(key string, value string) (err error) {
@@ -147,7 +150,7 @@ func (s *Scraper) push(key string, value string) (err error) {
 	return nil
 }
 
-func (s *Scraper) Init(systemID string) {
+func (s *Scraper) Init(systemID string, debugDump bool) {
 	// Create Cookie Jar
 	jar, err := cookiejar.New(&cookiejar.Options{PublicSuffixList: publicsuffix.List})
 	if err != nil {
@@ -159,6 +162,7 @@ func (s *Scraper) Init(systemID string) {
 		Jar: jar,
 	}
 	s.client = c
+	s.debugDump = debugDump
 	s.loginURL = baseURL + "/login"
 	s.fetchUpdatesURL = baseURL + "/station/" + systemID + "/getres?timestamp="
 	s.askRefreshURL = baseURL + "/station/" + systemID + "/askrefresh?connrq=1"
@@ -253,6 +257,10 @@ func (s *Scraper) Fetch() (Response, error) {
 
 	var requestURL string
 
+	// A fetch with no timestamp returns the FULL parameter list; subsequent
+	// fetches only return deltas. We dump the first full response for debugging.
+	isFull := s.lastFetch == ""
+
 	if s.lastFetch != "" {
 		requestURL = s.fetchUpdatesURL + url.QueryEscape(s.lastFetch)
 	} else {
@@ -275,6 +283,18 @@ func (s *Scraper) Fetch() (Response, error) {
 	if err != nil {
 		return Response{}, err
 	}
+
+	// Opt-in one-shot debug dump of the raw, byte-exact getres payload so the
+	// maintainer can catalog parameters the add-on does not yet map.
+	if s.debugDump && isFull && !s.dumped {
+		if werr := os.WriteFile("/share/setecna_getres_dump.json", body, 0644); werr != nil {
+			log.Println("[debug] getres raw dump failed:", werr)
+		} else {
+			log.Printf("[debug] wrote raw getres dump (%d bytes) to /share/setecna_getres_dump.json", len(body))
+			s.dumped = true
+		}
+	}
+
 	var result Response
 	if err := json.Unmarshal(body, &result); err != nil {
 		log.Println("Can not unmarshal JSON", err)

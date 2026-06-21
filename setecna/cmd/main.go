@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/Ingordigia/homeassistant-addon-setecna/models"
+	"github.com/Ingordigia/homeassistant-addon-setecna/pkg/config"
 	"github.com/Ingordigia/homeassistant-addon-setecna/pkg/helpers"
 	"github.com/Ingordigia/homeassistant-addon-setecna/pkg/homeassistant"
 	"github.com/Ingordigia/homeassistant-addon-setecna/pkg/mqtt"
@@ -24,7 +25,7 @@ var mqttPort string = os.Getenv("MQTT_PORT")
 var mqttUser string = os.Getenv("MQTT_USER")
 var mqttPassword string = os.Getenv("MQTT_PASSWORD")
 
-var advInt, isReadonly bool
+var advInt, isReadonly, debugDump bool
 
 func main() {
 
@@ -39,16 +40,23 @@ func main() {
 		log.Println("readonly parameter non specified, default is true")
 		isReadonly = true
 	}
+	debugDump, err = helpers.GetenvBool("DEBUG_DUMP")
+	if err != nil {
+		debugDump = false
+	}
 
 	if mqttPort == "" {
 		mqttPort = "1883"
 	}
 
+	availabilityTopic := "setecna/" + systemID + "/status"
+
 	mqttServer := new(mqtt.MqttServer)
-	mqttServer.Connect(mqttHost, mqttPort, mqttUser, mqttPassword)
+	// Connect publishes "online" to availabilityTopic via its OnConnect handler.
+	mqttServer.Connect(mqttHost, mqttPort, mqttUser, mqttPassword, availabilityTopic)
 
 	scraper := new(scraper.Scraper)
-	scraper.Init(systemID)
+	scraper.Init(systemID, debugDump)
 
 	// CONNECT TO SETECNA SERVERS
 	for {
@@ -69,6 +77,7 @@ func main() {
 	signal.Notify(quitChannel, syscall.SIGINT, syscall.SIGTERM)
 	<-quitChannel
 	//time for cleanup before exit
+	mqttServer.PublishRetained(availabilityTopic, "offline")
 	mqttServer.Disconnect()
 	log.Println("Service stopped")
 }
@@ -101,6 +110,25 @@ func do(m *mqtt.MqttServer, s *scraper.Scraper) {
 		responseMap[num.ID] = string(num.V)
 	}
 
+	// DEBUG: dump the parameters returned by the station that the add-on does
+	// not (yet) map to an entity, so new parameters can be discovered/mapped.
+	if debugDump {
+		known := make(models.ParamsMap)
+		known.AddEnabledParams(responseMap, isReadonly)
+		known.AddDisabledParams(responseMap, isReadonly)
+		unmapped := []map[string]string{}
+		for _, num := range response.Data {
+			if _, ok := known[num.ID]; !ok {
+				unmapped = append(unmapped, map[string]string{"Id": num.ID, "V": string(num.V)})
+			}
+		}
+		if derr := config.Save("/share/setecna_unmapped_ids.json", unmapped); derr != nil {
+			log.Println("[debug] unmapped-ids dump failed:", derr)
+		} else {
+			log.Printf("[debug] wrote %d unmapped param ids to /share/setecna_unmapped_ids.json", len(unmapped))
+		}
+	}
+
 	// MANAGE HA BUILT-IN ENTITIES
 	if advInt && !isReadonly {
 		// CREATE CLIMATE
@@ -120,6 +148,7 @@ func do(m *mqtt.MqttServer, s *scraper.Scraper) {
 			Topic:   "homeassistant/" + paramAttributes.EntityType + "/" + systemID + "_" + paramKey + "/config",
 			Message: "",
 			Qos:     0,
+			Retain:  true,
 		}
 		m.Publish(removeMessage)
 		time.Sleep(time.Millisecond * 100)
@@ -164,6 +193,7 @@ func do(m *mqtt.MqttServer, s *scraper.Scraper) {
 			Topic:   "homeassistant/" + paramAttributes.EntityType + "/" + systemID + "_" + paramKey + "/config",
 			Message: string(message),
 			Qos:     0,
+			Retain:  true,
 		}
 		m.Publish(configMessage)
 		time.Sleep(time.Millisecond * 100)
