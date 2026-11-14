@@ -1,5 +1,21 @@
 <!-- https://developers.home-assistant.io/docs/add-ons/presentation#keeping-a-changelog -->
 
+## 1.4.0
+
+- **OpenTherm cascade (boilers):** stations that drive one or more boilers over
+  OpenTherm now expose them. For every enabled generator (`OT_G{n}_ENABLE` ≠ 0):
+  status (`off` / `heating` / `DHW` / `flame` / `lockout` / `no communication`,
+  decoded like the web interface), a **flame** binary sensor and a **fault**
+  binary sensor (both read from the status word), the current request
+  (`none` / `heating` / `DHW` / `heating + DHW`), power, flow / return /
+  requested temperatures and the error code. Cascade level: active generators,
+  heating and DHW request temperatures, cascade flow temperature. The family is
+  absent on stations without OpenTherm generators.
+- **DHW:** added the *DHW auxiliary state* binary sensor (`ACS_AUX_OUTPUT`), on
+  when the auxiliary / second-stage generator is called for domestic hot water.
+- Internal: an entity can now read another parameter's state topic
+  (`Attributes.StateFrom`), used to expose single bits of a status word.
+
 ## 1.3.0
 
 Data-enrichment release — maps many parameters the station already reported but

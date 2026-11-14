@@ -33,7 +33,7 @@ func (bs *BinarySensor) Init(systemID, sensorID string, attributes Attributes) {
 	bs.Name = attributes.Name
 	bs.PayloadOff = "off"
 	bs.PayloadOn = "on"
-	bs.StateTopic = "homeassistant/" + attributes.EntityType + "/" + systemID + "_" + sensorID
+	bs.StateTopic = StateTopic(systemID, sensorID, attributes)
 	bs.UniqueID = systemID + "_" + sensorID
 	bs.ValueTemplate = attributes.ValueTemplate
 }
