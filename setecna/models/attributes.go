@@ -44,18 +44,23 @@ func LabelOr(from map[string]string, descrKey, fallback string) string {
 }
 
 type Attributes struct {
-	CommandTemplate   string   `json:"command_template"`
-	DeviceClass       string   `json:"device_class"`
-	EntityType        string   `json:"entity_type"`
-	EntityCategory    string   `json:"entity_category"`
-	Max               float64  `json:"max"`
-	Min               float64  `json:"min"`
-	Name              string   `json:"name"`
-	Options           []string `json:"options"`
-	StateClass        string   `json:"state_class"`
-	Step              float64  `json:"step"`
-	UnitOfMeasurement string   `json:"unit_of_measurement"`
-	ValueTemplate     string   `json:"value_template"`
+	CommandTemplate string   `json:"command_template"`
+	DeviceClass     string   `json:"device_class"`
+	EntityType      string   `json:"entity_type"`
+	EntityCategory  string   `json:"entity_category"`
+	Max             float64  `json:"max"`
+	Min             float64  `json:"min"`
+	Name            string   `json:"name"`
+	Options         []string `json:"options"`
+	StateClass      string   `json:"state_class"`
+	// StateFrom lets a derived entity read another parameter's state topic
+	// instead of its own, as "<entity_type>/<PARAM_ID>" (e.g.
+	// "sensor/OT_G1_STATUS"). Used to expose single bits of a status word as
+	// binary sensors without publishing extra topics.
+	StateFrom         string  `json:"state_from"`
+	Step              float64 `json:"step"`
+	UnitOfMeasurement string  `json:"unit_of_measurement"`
+	ValueTemplate     string  `json:"value_template"`
 }
 
 type ParamsMap map[string]Attributes
@@ -75,6 +80,7 @@ func (m ParamsMap) AddEnabledParams(from map[string]string, isReadOnly bool) {
 	m.addCalendars(from, true, isReadOnly, !isReadOnly)
 	m.addAlarms(from, true, isReadOnly, !isReadOnly)
 	m.addSolar(from, true, isReadOnly, !isReadOnly)
+	m.addOpenTherm(from, true, isReadOnly, !isReadOnly)
 	m.addDevice(from, true, isReadOnly, !isReadOnly)
 	m.markDiagnostics()
 }
@@ -93,6 +99,7 @@ func (m ParamsMap) AddDisabledParams(from map[string]string, isReadOnly bool) {
 	m.addCalendars(from, false, !isReadOnly, isReadOnly)
 	m.addAlarms(from, false, !isReadOnly, isReadOnly)
 	m.addSolar(from, false, !isReadOnly, isReadOnly)
+	m.addOpenTherm(from, false, !isReadOnly, isReadOnly)
 	m.addDevice(from, false, !isReadOnly, isReadOnly)
 	m.markDiagnostics()
 }
@@ -250,6 +257,15 @@ func (m ParamsMap) addDomesticHotWater(from map[string]string, static, read, wri
 			Name:          "DHW state",
 			EntityType:    "binary_sensor",
 			ValueTemplate: "{% if value == \"1\" %}on{% else %}off{% endif %}",
+		}
+		// Auxiliary (second stage) DHW command: the backup generator is called
+		// for domestic hot water when this is on.
+		if from["ACS_AUX_OUTPUT"] != "" {
+			m["ACS_AUX_OUTPUT"] = Attributes{
+				Name:          "DHW auxiliary state",
+				EntityType:    "binary_sensor",
+				ValueTemplate: "{% if value == \"1\" %}on{% else %}off{% endif %}",
+			}
 		}
 		m["GLOBAL_ACS_ENABLE"] = Attributes{
 			Name:          "DHW enabled",
@@ -1009,6 +1025,126 @@ func (m ParamsMap) addSolar(from map[string]string, static, read, write bool) {
 			}
 		}
 	}
+}
+
+// OpenTherm status word, as decoded by the Setecna web interface (OTSTATUS):
+// 0x01 lockout, 0x02 heating, 0x04 DHW, 0x08 flame, 0x80 not communicating.
+const otStatusTemplate = "{% set v = value | int %}" +
+	"{% if v == 0 %}off" +
+	"{% elif v | bitwise_and(128) %}no communication" +
+	"{% else %}{% set ns = namespace(l=[]) %}" +
+	"{% if v | bitwise_and(1) %}{% set ns.l = ns.l + ['lockout'] %}{% endif %}" +
+	"{% if v | bitwise_and(2) %}{% set ns.l = ns.l + ['heating'] %}{% endif %}" +
+	"{% if v | bitwise_and(4) %}{% set ns.l = ns.l + ['DHW'] %}{% endif %}" +
+	"{% if v | bitwise_and(8) %}{% set ns.l = ns.l + ['flame'] %}{% endif %}" +
+	"{{ ns.l | join(' + ') or v }}{% endif %}"
+
+// OpenTherm request, as decoded by the web interface: 0 none, 1 heating,
+// 2 DHW, 3 heating + DHW.
+const otRequestTemplate = "{% set v = value | int %}" +
+	"{{ {0: 'none', 1: 'heating', 2: 'DHW', 3: 'heating + DHW'}.get(v, v) }}"
+
+// addOpenTherm exposes the OpenTherm cascade (boilers driven by the REG system
+// over OpenTherm): the cascade request and, for every enabled generator, its
+// status, request, power and flow/return temperatures. A generator is enabled
+// when OT_G{n}_ENABLE is non-zero; the whole family stays absent on stations
+// without OpenTherm generators.
+func (m ParamsMap) addOpenTherm(from map[string]string, static, read, write bool) {
+	var enabled []int
+	for i := 0; i <= 8; i++ {
+		e := from["OT_G"+fmt.Sprint(i)+"_ENABLE"]
+		if e != "" && e != "0" {
+			enabled = append(enabled, i)
+		}
+	}
+	if len(enabled) == 0 || !static {
+		return
+	}
+	temp := func(name string) Attributes {
+		return Attributes{
+			Name:              name,
+			EntityType:        "sensor",
+			DeviceClass:       "temperature",
+			UnitOfMeasurement: "°C",
+			StateClass:        "measurement",
+			ValueTemplate:     "{{ value | int / 10 }}",
+		}
+	}
+	if from["OT_NCALD_ACTIVE"] != "" {
+		m["OT_NCALD_ACTIVE"] = Attributes{
+			Name:          "OpenTherm active generators",
+			EntityType:    "sensor",
+			StateClass:    "measurement",
+			ValueTemplate: "{{ value | int }}",
+		}
+	}
+	if from["OT_R_SETPOINT"] != "" {
+		m["OT_R_SETPOINT"] = temp("OpenTherm heating request temperature")
+	}
+	if from["OT_A_SETPOINT"] != "" {
+		m["OT_A_SETPOINT"] = temp("OpenTherm DHW request temperature")
+	}
+	if from["OT_SEC_TEMP"] != "" && from["OT_SEC_TEMP"] != "32769" {
+		m["OT_SEC_TEMP"] = temp("OpenTherm cascade flow temperature")
+	}
+	for _, i := range enabled {
+		g := "OT_G" + fmt.Sprint(i)
+		base := "OpenTherm generator " + fmt.Sprint(i)
+		m[g+"_STATUS"] = Attributes{
+			Name:          base + " status",
+			EntityType:    "sensor",
+			ValueTemplate: otStatusTemplate,
+		}
+		// Single bits of the status word, read from the status topic.
+		m[g+"_STATUS_FLAME"] = Attributes{
+			Name:          base + " flame",
+			EntityType:    "binary_sensor",
+			StateFrom:     "sensor/" + g + "_STATUS",
+			ValueTemplate: "{% if value | int | bitwise_and(136) == 8 %}on{% else %}off{% endif %}",
+		}
+		m[g+"_STATUS_FAULT"] = Attributes{
+			Name:           base + " fault",
+			EntityType:     "binary_sensor",
+			DeviceClass:    "problem",
+			EntityCategory: "diagnostic",
+			StateFrom:      "sensor/" + g + "_STATUS",
+			ValueTemplate:  "{% if value | int | bitwise_and(129) %}on{% else %}off{% endif %}",
+		}
+		m[g+"_RQ"] = Attributes{
+			Name:          base + " request",
+			EntityType:    "sensor",
+			ValueTemplate: otRequestTemplate,
+		}
+		// Current power as shown by the web interface ("% or kW" depending on
+		// the boiler); tenths, unit not confirmed so none is declared.
+		m[g+"_POWER"] = Attributes{
+			Name:          base + " power",
+			EntityType:    "sensor",
+			StateClass:    "measurement",
+			ValueTemplate: "{{ value | int / 10 }}",
+		}
+		m[g+"_TMAND"] = temp(base + " flow temperature")
+		m[g+"_TRIT"] = temp(base + " return temperature")
+		m[g+"_RQTEMP"] = temp(base + " requested temperature")
+		m[g+"_ERROR"] = Attributes{
+			Name:           base + " error code",
+			EntityType:     "sensor",
+			EntityCategory: "diagnostic",
+			ValueTemplate:  "{{ value | int }}",
+		}
+	}
+}
+
+// StateTopic returns the MQTT state topic of an entity: its own
+// "<entity_type>/<systemID>_<sensorID>" topic, or the topic of the parameter
+// named by StateFrom for derived entities.
+func StateTopic(systemID, sensorID string, a Attributes) string {
+	if a.StateFrom != "" {
+		if t, id, ok := strings.Cut(a.StateFrom, "/"); ok {
+			return "homeassistant/" + t + "/" + systemID + "_" + id
+		}
+	}
+	return "homeassistant/" + a.EntityType + "/" + systemID + "_" + sensorID
 }
 
 // addDevice exposes the firmware/release identifiers as diagnostic sensors. The

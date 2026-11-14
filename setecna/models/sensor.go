@@ -32,7 +32,7 @@ func (s *Sensor) Init(systemID, sensorID string, attributes Attributes) {
 	s.EntityCategory = attributes.EntityCategory
 	s.Name = attributes.Name
 	s.StateClass = attributes.StateClass
-	s.StateTopic = "homeassistant/" + attributes.EntityType + "/" + systemID + "_" + sensorID
+	s.StateTopic = StateTopic(systemID, sensorID, attributes)
 	s.UniqueID = systemID + "_" + sensorID
 	s.UnitOfMeasurement = attributes.UnitOfMeasurement
 	s.ValueTemplate = attributes.ValueTemplate
